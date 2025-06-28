@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Popup Stock</title>
+  <style>
+    body, html { margin: 0; background: transparent; font-family: sans-serif; }
+    .popup { position: fixed; left: 50%; transform: translateX(-50%) scale(0.9); opacity: 0; transition: opacity 0.3s ease, transform 0.3s ease; width: 280px; background: #222; color: #fff; border-radius: 12px; box-shadow: 0 0 10px rgba(0,0,0,0.6); padding: 12px; text-align: left; z-index: 1000; pointer-events: none; }
+    .popup.show { opacity: 1; transform: translateX(-50%) scale(1); pointer-events: auto; }
+    .popup.shake { animation: shakeAnim 0.5s ease-in-out; }
+    @keyframes shakeAnim { 0% { transform: translateX(-50%) rotate(0deg); } 25% { transform: translateX(-50%) rotate(5deg); } 50% { transform: translateX(-50%) rotate(-5deg); } 75% { transform: translateX(-50%) rotate(3deg); } 100% { transform: translateX(-50%) rotate(0deg); } }
+    .popup table { width: 100%; border-collapse: collapse; }
+    .popup td { padding: 4px 0; display: flex; align-items: center; }
+    .popup td img { width: 20px; height: 20px; margin-right: 6px; }
+    .timer { position: relative; height: 6px; background: #444; border-radius: 3px; overflow: hidden; margin-top: 6px; }
+    .timer-bar { height: 100%; background: #0f0; width: 100%; transition: width 1s linear; }
+    .timer-text { font-size: .8em; text-align: right; margin-top: 4px; opacity: .7; }
+  </style>
+</head>
+<body>
+  <audio id="appearSound" src="new.wav" preload="auto"></audio>
+  <audio id="shakeSound" src="shake.wav" preload="auto"></audio>
+
+  <div id="popup-stock" class="popup" style="top: 50px;">
+    <table id="table-stock"></table>
+    <div class="timer"><div id="bar-stock" class="timer-bar"></div></div>
+    <div class="timer-text" id="timer-stock"></div>
+  </div>
+  <div id="popup-se" class="popup" style="top: 175px;">
+    <table id="table-se"></table>
+    <div class="timer"><div id="bar-se" class="timer-bar"></div></div>
+    <div class="timer-text" id="timer-se"></div>
+  </div>
+  <script>
+    (function() {
+      const seedID = ["loquat","feijo","sugar_apple","godly_sprinkler","tanning_mirror","master_sprinkler","friendship_pot"];
+      const eggID = ["bug_egg","paradise_egg"];
+      const weatherID = ["thunderstorm","disco","jandelstorm","blackhole","djjhai","nightevent","meteorshower","sungod","jandelfloat","chocolaterain","bloodmoonevent","volcano","alieninvasion","spacetravel","summerharvest","tornado","windy"];
+
+      const appearSound = document.getElementById('appearSound');
+      const shakeSound = document.getElementById('shakeSound');
+      const popupStock = document.getElementById('popup-stock');
+      const popupSE = document.getElementById('popup-se');
+      const tableStock = document.getElementById('table-stock');
+      const tableSE = document.getElementById('table-se');
+      const timerStockText = document.getElementById('timer-stock');
+      const timerSEText = document.getElementById('timer-se');
+      const barStock = document.getElementById('bar-stock');
+      const barSE = document.getElementById('bar-se');
+
+      function getNextFiveInterval() {
+        const now = new Date();
+        const ms = 5 * 60 * 1000;
+        const next = new Date(Math.ceil(now.getTime() / ms) * ms);
+        return next.getTime() - now.getTime();
+      }
+
+      function triggerShake(popup, useShakeSound = true) {
+        popup.classList.remove('shake');
+        void popup.offsetWidth;
+        popup.classList.add('shake');
+        if (useShakeSound && shakeSound) shakeSound.play().catch(() => {});
+      }
+
+      function showPopup(popup, barElem, textElem, duration) {
+        clearInterval(popup._interval);
+        clearTimeout(popup._timeout);
+        clearInterval(popup._shakeInterval);
+        if (appearSound) appearSound.play().catch(() => {});
+        popup.classList.add('show');
+        let remaining = duration;
+        barElem.style.width = '100%';
+        textElem.textContent = `Disappears in ${Math.ceil(remaining/1000)}s`;
+        popup._interval = setInterval(() => {
+          remaining = Math.max(0, remaining - 1000);
+          barElem.style.width = `${(remaining/duration)*100}%`;
+          textElem.textContent = `Disappears in ${Math.ceil(remaining/1000)}s`;
+        }, 1000);
+        popup._timeout = setTimeout(() => hidePopup(popup), duration);
+        triggerShake(popup, false);
+        popup._shakeInterval = setInterval(() => triggerShake(popup), 15000);
+      }
+
+      function hidePopup(popup) {
+        clearInterval(popup._interval);
+        clearTimeout(popup._timeout);
+        clearInterval(popup._shakeInterval);
+        popup.classList.remove('shake');
+        popup.classList.remove('show');
+      }
+
+      function render(data) {
+        if (!data) return;
+
+        const stockRows = [];
+        const seRows = [];
+
+        (data.seed_stock || []).forEach(item => {
+          const id = (item.item_id||'').toLowerCase();
+          if (seedID.includes(id)) {
+            stockRows.push(`<tr><td><img src="${item.icon}" alt="${item.display_name}">${item.quantity}x ${item.display_name}</td></tr>`);
+          }
+        });
+
+        (data.egg_stock || []).forEach(item => {
+          const id = (item.item_id||'').toLowerCase();
+          if (eggID.includes(id)) {
+            seRows.push(`<tr><td><img src="${item.icon}" alt="${item.display_name}">${item.quantity}x ${item.display_name}</td></tr>`);
+          }
+        });
+
+        (data.weather || []).forEach(w => {
+          if (weatherID.includes(w.weather_id) && w.active) {
+            seRows.push(`<tr><td><img src="${w.icon}" alt="${w.weather_name}">${w.weather_name}</td></tr>`);
+          }
+        });
+
+        tableStock.innerHTML = stockRows.join('');
+        tableSE.innerHTML = seRows.join('');
+
+        if (stockRows.length) {
+          const duration = getNextFiveInterval();
+          showPopup(popupStock, barStock, timerStockText, duration);
+          const stockHeight = popupStock.offsetHeight;
+          popupSE.style.top = `${50 + stockHeight + 10}px`;
+        } else hidePopup(popupStock);
+
+        if (seRows.length) showPopup(popupSE, barSE, timerSEText, 30000);
+        else hidePopup(popupSE);
+      }
+
+      function processData(data) {
+        render(data);
+      }
+
+      let ws;
+      let reconnectInterval;
+      function initWebSocket() {
+        ws = new WebSocket('wss://websocket.joshlei.com/growagarden?user_id=1380498771439255582');
+        ws.onmessage = e => { try { processData(JSON.parse(e.data)); } catch {} };
+        ws.onerror = () => {
+          console.warn('WebSocket error, will retry connection every 5s');
+          scheduleReconnect();
+        };
+        ws.onclose = () => {
+          console.warn('WebSocket closed, will retry connection every 5s');
+          scheduleReconnect();
+        };
+      }
+
+      function scheduleReconnect() {
+        if (reconnectInterval) return;
+        reconnectInterval = setInterval(() => {
+          fetch('https://api.joshlei.com/v2/growagarden/stock')
+            .then(r => r.json())
+            .then(data => {
+              processData(data);
+              if (!ws || ws.readyState === WebSocket.CLOSED) {
+                try { initWebSocket(); } catch {}
+              }
+            })
+            .catch(() => {});
+        }, 5000);
+      }
+
+      initWebSocket();
+
+      window.addEventListener('load', () => {
+        fetch('https://api.joshlei.com/v2/growagarden/stock')
+          .then(r => r.json()).then(processData).catch(() => {});
+      });
+
+      window.debugPush = function({ seed_stock = [], egg_stock = [], weather = [] }) {
+        processData({ seed_stock, egg_stock, weather });
+      };
+    })();
+  </script>
+</body>
+</html>
